@@ -3,7 +3,7 @@ FROM node:18-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
-COPY frontend . .
+COPY frontend .
 RUN npm run build
 
 # Stage 2: Build backend
@@ -11,7 +11,7 @@ FROM node:16-alpine AS backend-build
 WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm install
-COPY backend . .
+COPY backend .
 
 # Stage 3: Setup frontend with nginx
 FROM nginx:alpine AS frontend
