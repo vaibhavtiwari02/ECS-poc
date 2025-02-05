@@ -1,34 +1,37 @@
-# Stage 1: Build frontend
-FROM node:18-alpine AS frontend-build
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm install
-COPY frontend .
-RUN npm run build
+# Use a base image with both Nginx and Apache
+FROM ubuntu:latest
 
-# Stage 2: Build backend
-FROM node:16-alpine AS backend-build
-WORKDIR /app/backend
-COPY backend/package*.json ./
-RUN npm install
-COPY backend .
+# Install Nginx, Apache, and necessary utilities
+RUN apt-get update && apt-get install -y \
+    nginx \
+    apache2 \
+    && apt-get clean
 
-# Stage 3: Setup frontend with nginx
-FROM nginx:alpine AS frontend
-COPY --from=frontend-build /app/frontend/dist /usr/share/nginx/html
-EXPOSE 80
+# Set up Nginx to show a welcome page
+RUN echo "Welcome to Nginx!" > /var/www/html/index.html
 
-# Stage 4: Setup backend with node
-FROM node:16-alpine AS backend
-WORKDIR /usr/src/app
-COPY --from=backend-build /app/backend /usr/src/app
+# Set up Apache to show a welcome page
+RUN echo "Welcome to Apache!" > /var/www/html/apache_index.html
 
-# Install Nginx (required for the frontend)
-RUN apk add --no-cache nginx
+# Fix Apache ServerName warning
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
-# Expose backend and frontend ports
-EXPOSE 80
-EXPOSE 5000
+# Configure Apache to listen on port 8002
+RUN sed -i 's/80/8002/' /etc/apache2/ports.conf \
+    && sed -i 's/<VirtualHost \*:80>/<VirtualHost \*:8002>/' /etc/apache2/sites-available/000-default.conf
 
-# Final Stage - Specify default command to run both services
-CMD sh -c "node /usr/src/app/server.js & nginx -g 'daemon off;'"
+# Configure Nginx to listen on port 8001
+RUN echo 'server { listen 8001; location / { root /var/www/html; index index.html; } }' > /etc/nginx/sites-available/default
+
+# Expose ports 8001 for Nginx and 8002 for Apache
+EXPOSE 8001 8002
+
+# Create a script to run both services
+RUN echo '#!/bin/bash\n\
+service apache2 start\n\
+service nginx start\n\
+tail -f /dev/null' > /start.sh \
+    && chmod +x /start.sh
+
+# Set the entry point to run the start script
+CMD ["/start.sh"]
